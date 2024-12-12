@@ -1,0 +1,185 @@
+#include <Wire.h>
+#include <Zumo32U4.h>
+#include <PololuOLED.h>
+
+Zumo32U4Buzzer buzzer;
+Zumo32U4LineSensors lineSensors;
+Zumo32U4Motors motors;
+Zumo32U4ButtonA buttonA;
+Zumo32U4ButtonB buttonB;
+Zumo32U4ButtonC buttonC;
+Zumo32U4OLED display;
+Zumo32U4Encoders encoders;
+Zumo32U4IMU imu;
+Zumo32U4ProximitySensors proxSensors;
+
+#define NUM_SENSORS 5
+uint16_t lineSensorValues[NUM_SENSORS];
+
+uint32_t count = 0;
+int speed = 170;
+uint16_t SensorMax[5] = {0, 0, 0, 0, 0};
+uint16_t SensorMin[5] = {2000, 2000, 2000, 2000, 2000};
+int SensorThreshold[5];
+bool ledOn = true;
+int kimlarsen = 0;
+
+void setup() {
+  Serial.begin(9600);
+  lineSensors.initFiveSensors();
+  display.gotoXY(0, 0);
+  display.print("0");
+  Kali();
+  PrintSensorThreshold();
+  Bip();
+}
+
+
+void Kali(){
+  //Serial.println("Calibrating");
+  delay(2000);
+  ledYellow(ledOn);
+  TurnOnSpot();
+  
+  for (int i = 0; i < 500; i++ ){
+    readLineSensors();
+    for (int j = 0; j < 5; j++){
+        if (lineSensorValues[j] > SensorMax[j]){
+            SensorMax[j] = lineSensorValues[j];
+        }
+
+        if (lineSensorValues[j] < SensorMin[j]){
+            SensorMin[j] = lineSensorValues[j];
+        }
+    } 
+  }
+  for (int i=0; i<5; i++){
+  SensorThreshold[i] = (SensorMax[i]+SensorMin[i])/2;
+  ledYellow(!ledOn);
+  }
+  //Serial.print(SensorThreshold[5]);
+  Bip();
+  ledGreen(ledOn);
+  stop();
+  //delay(5000);
+}
+
+void Bip(){
+  buzzer.playNote(NOTE_A(4),100,15);
+}
+
+
+bool lineDetected() {
+  lineSensors.read(lineSensorValues); // Læser linjesensorværdier
+  // Tjekker om nogen af sensorerne har en værdi over threshold
+
+  if(lineSensorValues[0] > SensorThreshold[0] || lineSensorValues[4] > SensorThreshold[4]){
+    return true;
+  }
+  else 
+    return false;
+}
+
+
+
+void start() {
+  while (lineDetected() == false) {
+    motors.setSpeeds(speed,speed);
+
+  }
+  stop();
+
+}
+
+void stop() {
+  motors.setSpeeds(0,0);
+
+}
+
+void TurnOnSpot(){
+  motors.setSpeeds(speed, -speed);
+}
+
+void readLineSensors(){
+  lineSensors.read(lineSensorValues, QTR_EMITTERS_ON);
+  delay(20);
+}
+
+void PrintSensorThreshold(){
+  //uint16_t SensorThreshold[5] ={(SensorMax[0]+SensorMin[0])/2, (SensorMax[1]+SensorMin[1])/2, (SensorMax[2]+SensorMin[2])/2, (SensorMax[3]+SensorMin[3])/2, (SensorMax[4]+SensorMin[4])/2};
+  char buffer[80];
+  sprintf(buffer, "%4d %4d %4d %4d %4d \n", 
+    SensorThreshold[0], 
+    SensorThreshold[1],
+    SensorThreshold[2],
+    SensorThreshold[3],
+    SensorThreshold[4]
+    );
+    Serial.print(buffer);
+    return SensorThreshold;
+}
+
+void mayodinojay(){
+  motors.setSpeeds(speed,-speed);
+  delay(800);
+  stop();
+}
+
+void softmayodinojay(){
+  motors.setSpeeds(speed,0.01*speed);
+
+}
+
+void sincodemayo() {
+  motors.setSpeeds(0.1*speed,speed);
+
+}
+
+void trumpswall(){
+  if(lineSensorValues[0] > SensorThreshold[0]){
+    softmayodinojay();
+  }
+  if(lineSensorValues[0] < SensorThreshold[0]){
+    sincodemayo();
+  }
+  /*if(lineSensorValues[1] > SensorThreshold[1]){
+    motors.setSpeeds(speed,-speed*2);
+
+  }
+  */
+  if(lineSensorValues[4] > SensorThreshold[4]){
+    motors.setSpeeds(speed,-speed);
+    delay(450);
+  }
+ if(lineSensorValues[4] > SensorThreshold[4] && lineSensorValues[0] > SensorThreshold[0]){
+    motors.setSpeeds(speed,-speed);
+    delay(450);
+    display.clear();
+    display.gotoXY(0, 0);
+    display.print("1");
+  }
+}
+
+
+
+void loop() {
+  readLineSensors();
+  switch (kimlarsen){
+    case 0:
+      if (buttonA.isPressed()){
+        kimlarsen = 1;
+        buttonA.waitForRelease();
+      }
+      break;
+    case 1:
+      start(); 
+      mayodinojay();
+      kimlarsen = 2;
+      break;
+    case 2:
+      trumpswall();
+      break;
+  }
+
+
+}
