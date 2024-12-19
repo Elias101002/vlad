@@ -6,37 +6,35 @@ Zumo32U4Buzzer buzzer;
 Zumo32U4LineSensors lineSensors;
 Zumo32U4Motors motors;
 Zumo32U4ButtonA buttonA;
-Zumo32U4ButtonB buttonB;
-Zumo32U4ButtonC buttonC;
 Zumo32U4OLED display;
-Zumo32U4Encoders encoders;
-Zumo32U4IMU imu;
 Zumo32U4ProximitySensors proxSensors;
 
 #define NUM_SENSORS 5
 uint16_t lineSensorValues[NUM_SENSORS];
 
-uint32_t count = 0;
 int speed = 170;
-uint16_t SensorMax[5] = {0, 0, 0, 0, 0};
+uint16_t SensorMax[5] = {0, 0, 0, 0, 0}; //Theese two array are for our threshold to have a min and max when we calibrate.
 uint16_t SensorMin[5] = {2000, 2000, 2000, 2000, 2000};
-int SensorThreshold[5];
+int SensorThreshold[5]; //This will be the final values after calibrating the threshold.
 bool ledOn = true;
-int kimlarsen = 0;
+int buttton = 0; //For our switch case.
 
 void setup() {
   Serial.begin(9600);
   lineSensors.initFiveSensors();
-  display.gotoXY(0, 0);
-  display.print("0");
   Kali();
-  PrintSensorThreshold();
-  Bip();
+  Bip(); //To notify when the calibration is done.
 }
 
 
 void Kali(){
-  //Serial.println("Calibrating");
+  /*We use this function to calibrate the threshold, so we wont have to change it manually. 
+  We start by turning on the LED, then the motors to turn on the spot.
+  Then we count for 500 iterations to be sure we have a good threshold.
+  Then we go through all our 5 sensors, if the current value is higher than our max, we change it,
+  and if its less than our minimum we change it. Lastly we take the average of max and min,
+  give a LED and sound indication that we are done and turn the motors off.
+  */
   delay(2000);
   ledYellow(ledOn);
   TurnOnSpot();
@@ -70,8 +68,8 @@ void Bip(){
 
 
 bool lineDetected() {
-  lineSensors.read(lineSensorValues); // Læser linjesensorværdier
-  // Tjekker om nogen af sensorerne har en værdi over threshold
+  lineSensors.read(lineSensorValues); 
+  //A boolian to easily check the two outer most senors. 
 
   if(lineSensorValues[0] > SensorThreshold[0] || lineSensorValues[4] > SensorThreshold[4]){
     return true;
@@ -83,6 +81,7 @@ bool lineDetected() {
 
 
 void start() {
+  //The first function to just find the line.
   while (lineDetected() == false) {
     motors.setSpeeds(speed,speed);
 
@@ -106,7 +105,6 @@ void readLineSensors(){
 }
 
 void PrintSensorThreshold(){
-  //uint16_t SensorThreshold[5] ={(SensorMax[0]+SensorMin[0])/2, (SensorMax[1]+SensorMin[1])/2, (SensorMax[2]+SensorMin[2])/2, (SensorMax[3]+SensorMin[3])/2, (SensorMax[4]+SensorMin[4])/2};
   char buffer[80];
   sprintf(buffer, "%4d %4d %4d %4d %4d \n", 
     SensorThreshold[0], 
@@ -119,34 +117,37 @@ void PrintSensorThreshold(){
     return SensorThreshold;
 }
 
-void mayodinojay(){
+void hardTurnRight(){
   motors.setSpeeds(speed,-speed);
   delay(800);
   stop();
 }
 
-void softmayodinojay(){
+void softTurnRight(){
   motors.setSpeeds(speed,0.01*speed);
 
 }
 
-void sincodemayo() {
+void TurnLeft() {
   motors.setSpeeds(0.1*speed,speed);
 
 }
 
-void trumpswall(){
+void maseSolver(){
+  /*This was the maser solver, by constantly following the left line.
+  We wanted to make sure our crossed the line as little as possible.
+  The first two if statements are to just follow the line with the left most sensor.
+  Constanly turning soft out of the line (to keep going forward), and hard into the line (to better make a left corner turn).
+  The next if statement was when comming straight into a corcer, we wanted the rightmost sensor to react and make turn on the spot.
+  The last is when both sensors see a corner at the same time, to turn on spot again.
+  */
   if(lineSensorValues[0] > SensorThreshold[0]){
-    softmayodinojay();
+    softTurnRight();
   }
   if(lineSensorValues[0] < SensorThreshold[0]){
-    sincodemayo();
+    TurnLeft();
   }
-  /*if(lineSensorValues[1] > SensorThreshold[1]){
-    motors.setSpeeds(speed,-speed*2);
 
-  }
-  */
   if(lineSensorValues[4] > SensorThreshold[4]){
     motors.setSpeeds(speed,-speed);
     delay(450);
@@ -154,30 +155,35 @@ void trumpswall(){
  if(lineSensorValues[4] > SensorThreshold[4] && lineSensorValues[0] > SensorThreshold[0]){
     motors.setSpeeds(speed,-speed);
     delay(450);
-    display.clear();
+    /*display.clear();
     display.gotoXY(0, 0);
     display.print("1");
+    */
+    //The display was just to see if the function was run, whitout being connected to serial.
   }
 }
 
 
 
 void loop() {
+  /* We used a swich case to connect a button, so we didnt have to rush in position after calibration 
+  and only starting the mase solver after first seeing the first line.
+  */
   readLineSensors();
-  switch (kimlarsen){
+  switch (buttton){
     case 0:
       if (buttonA.isPressed()){
-        kimlarsen = 1;
+        buttton = 1;
         buttonA.waitForRelease();
       }
       break;
     case 1:
       start(); 
-      mayodinojay();
-      kimlarsen = 2;
+      hardTurnRight();
+      buttton = 2;
       break;
     case 2:
-      trumpswall();
+       maseSolver();
       break;
   }
 
